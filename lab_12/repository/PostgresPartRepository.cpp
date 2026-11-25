@@ -6,19 +6,8 @@ void PostgresPartRepository::save(const Part& part) {
     pqxx::connection conn(connection_string_);
     pqxx::work tx(conn);
     
-    pqxx::params p;
-    p.append(part.getArticle());
-    p.append(part.getName());
-    p.append(part.getPrice());
-    p.append(part.getQuantity());
-    
-    if (part.getSupplierId().has_value()) {
-        p.append(part.getSupplierId().value());
-    } else {
-        p.append();
-    }
-
-    tx.exec("INSERT INTO parts (article, name, price, quantity, supplier_id) VALUES ($1, $2, $3, $4, $5)", p);
+    tx.exec_params("INSERT INTO parts (article, name, price, quantity, supplier_id) VALUES ($1, $2, $3, $4, $5)",
+                   part.getArticle(), part.getName(), part.getPrice(), part.getQuantity(), part.getSupplierId());
     tx.commit();
 }
 
@@ -33,6 +22,13 @@ void PostgresPartRepository::update(const Part& part) {
         tx.exec_params("UPDATE parts SET price = $1, quantity = $2, supplier_id = NULL WHERE id = $3",
                        part.getPrice(), part.getQuantity(), part.getId());
     }
+    tx.commit();
+}
+
+void PostgresPartRepository::remove(int id) {
+    pqxx::connection conn(connection_string_);
+    pqxx::work tx(conn);
+    tx.exec_params("DELETE FROM parts WHERE id = $1", id);
     tx.commit();
 }
 
