@@ -1,4 +1,5 @@
 #include "PostgresPartRepository.h"
+#include <stdexcept>
 
 PostgresPartRepository::PostgresPartRepository(const std::string& conn_str) : connection_string_(conn_str) {}
 
@@ -6,8 +7,12 @@ void PostgresPartRepository::save(const Part& part) {
     pqxx::connection conn(connection_string_);
     pqxx::work tx(conn);
     
-    tx.exec_params("INSERT INTO parts (article, name, price, quantity, supplier_id) VALUES ($1, $2, $3, $4, $5)",
-                   part.getArticle(), part.getName(), part.getPrice(), part.getQuantity(), part.getSupplierId());
+    try {
+        tx.exec_params("INSERT INTO parts (article, name, price, quantity, supplier_id) VALUES ($1, $2, $3, $4, $5)",
+                       part.getArticle(), part.getName(), part.getPrice(), part.getQuantity(), part.getSupplierId());
+    } catch (const pqxx::foreign_key_violation&) {
+        throw std::runtime_error("Поставщик с id " + std::to_string(part.getSupplierId().value_or(0)) + " не найден");
+    }
     tx.commit();
 }
 
