@@ -5,23 +5,34 @@ PostgresPartRepository::PostgresPartRepository(const std::string& conn_str) : co
 void PostgresPartRepository::save(const Part& part) {
     pqxx::connection conn(connection_string_);
     pqxx::work tx(conn);
-    tx.exec_params("INSERT INTO parts (article, name, price, quantity, supplier_id) VALUES ($1, $2, $3, $4, $5)",
-                   part.getArticle(), part.getName(), part.getPrice(), part.getQuantity(), part.getSupplierId());
+    
+    pqxx::params p;
+    p.append(part.getArticle());
+    p.append(part.getName());
+    p.append(part.getPrice());
+    p.append(part.getQuantity());
+    
+    if (part.getSupplierId().has_value()) {
+        p.append(part.getSupplierId().value());
+    } else {
+        p.append();
+    }
+
+    tx.exec("INSERT INTO parts (article, name, price, quantity, supplier_id) VALUES ($1, $2, $3, $4, $5)", p);
     tx.commit();
 }
 
 void PostgresPartRepository::update(const Part& part) {
     pqxx::connection conn(connection_string_);
     pqxx::work tx(conn);
-    tx.exec_params("UPDATE parts SET price = $1, quantity = $2 WHERE id = $3",
-                   part.getPrice(), part.getQuantity(), part.getId());
-    tx.commit();
-}
-
-void PostgresPartRepository::remove(int id) {
-    pqxx::connection conn(connection_string_);
-    pqxx::work tx(conn);
-    tx.exec_params("DELETE FROM parts WHERE id = $1", id);
+    
+    if (part.getSupplierId().has_value()) {
+        tx.exec_params("UPDATE parts SET price = $1, quantity = $2, supplier_id = $3 WHERE id = $4",
+                       part.getPrice(), part.getQuantity(), part.getSupplierId().value(), part.getId());
+    } else {
+        tx.exec_params("UPDATE parts SET price = $1, quantity = $2, supplier_id = NULL WHERE id = $3",
+                       part.getPrice(), part.getQuantity(), part.getId());
+    }
     tx.commit();
 }
 
@@ -30,10 +41,17 @@ std::optional<Part> PostgresPartRepository::findById(int id) {
     pqxx::work tx(conn);
     auto result = tx.exec_params("SELECT id, article, name, price, quantity, supplier_id FROM parts WHERE id = $1", id);
     tx.commit();
+    
     if (result.empty()) return std::nullopt;
     auto row = result[0];
+    
+    std::optional<int> sup_id = std::nullopt;
+    if (!row[5].is_null()) {
+        sup_id = row[5].as<int>();
+    }
+
     return Part(row[0].as<int>(), row[1].as<std::string>(), row[2].as<std::string>(), 
-                row[3].as<double>(), row[4].as<int>(), row[5].as<int>());
+                row[3].as<double>(), row[4].as<int>(), sup_id);
 }
 
 std::optional<Part> PostgresPartRepository::findByArticle(const std::string& article) {
@@ -41,10 +59,17 @@ std::optional<Part> PostgresPartRepository::findByArticle(const std::string& art
     pqxx::work tx(conn);
     auto result = tx.exec_params("SELECT id, article, name, price, quantity, supplier_id FROM parts WHERE article = $1", article);
     tx.commit();
+    
     if (result.empty()) return std::nullopt;
     auto row = result[0];
+    
+    std::optional<int> sup_id = std::nullopt;
+    if (!row[5].is_null()) {
+        sup_id = row[5].as<int>();
+    }
+
     return Part(row[0].as<int>(), row[1].as<std::string>(), row[2].as<std::string>(), 
-                row[3].as<double>(), row[4].as<int>(), row[5].as<int>());
+                row[3].as<double>(), row[4].as<int>(), sup_id);
 }
 
 std::vector<Part> PostgresPartRepository::getAll() {
@@ -55,8 +80,12 @@ std::vector<Part> PostgresPartRepository::getAll() {
     
     std::vector<Part> parts;
     for (auto row : result) {
+        std::optional<int> sup_id = std::nullopt;
+        if (!row[5].is_null()) {
+            sup_id = row[5].as<int>();
+        }
         parts.emplace_back(row[0].as<int>(), row[1].as<std::string>(), row[2].as<std::string>(), 
-                           row[3].as<double>(), row[4].as<int>(), row[5].as<int>());
+                           row[3].as<double>(), row[4].as<int>(), sup_id);
     }
     return parts;
 }

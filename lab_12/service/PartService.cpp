@@ -3,14 +3,13 @@
 
 PartService::PartService(std::shared_ptr<IPartRepository> repository) : repository_(std::move(repository)) {}
 
-void PartService::addNewPart(const std::string& article, const std::string& name, double price, int quantity, int supplier_id) {
+void PartService::addNewPart(const std::string& article, const std::string& name, double price, int quantity, std::optional<int> supplier_id) {
     if (repository_->findByArticle(article).has_value()) {
-        throw std::runtime_error("Запчасть с таким артикулом уже существует");
+        throw std::runtime_error("Запчасть с таким артикулом уже существует!");
     }
     Part new_part(0, article, name, price, quantity, supplier_id);
     repository_->save(new_part);
 }
-
 void PartService::sellPart(int part_id, int amount) {
     auto part_opt = repository_->findById(part_id);
     if (!part_opt.has_value()) {
